@@ -1,5 +1,5 @@
 import { isMacShortcutPlatform, parseShortcutParts } from "@/lib/editor/shortcutDisplay";
-import { readNormalizedShortcutSettings, type ShortcutActionId, type ShortcutSettings } from "@/lib/editor/shortcutRegistry";
+import { readNormalizedShortcutSettings, TOOLBAR_COMMAND_ACTIONS, type ShortcutActionId, type ShortcutSettings, type ToolbarCommandActionId } from "@/lib/editor/shortcutRegistry";
 
 export interface ShortcutLikeEvent {
   key: string;
@@ -308,6 +308,10 @@ export function isConvertNamingStyleShortcut(event: ShortcutLikeEvent, shortcuts
 
 export function isNewQueryShortcut(event: ShortcutLikeEvent, shortcuts?: Partial<ShortcutSettings>): boolean {
   return matchesShortcut(event, actionShortcut("newQuery", shortcuts));
+}
+
+export function toolbarCommandFromShortcut(event: ShortcutLikeEvent, shortcuts?: Partial<ShortcutSettings>): ToolbarCommandActionId | null {
+  return TOOLBAR_COMMAND_ACTIONS.find((actionId) => matchesShortcut(event, actionShortcut(actionId, shortcuts))) ?? null;
 }
 
 /** Whether a global shortcut originated from the sidebar navigation surface. */

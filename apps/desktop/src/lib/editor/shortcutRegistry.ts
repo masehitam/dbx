@@ -107,7 +107,13 @@ export type ShortcutActionId =
   | "viewTableDdl"
   | "editSidebarTableStructure"
   | "sendSelectionToAi"
-  | "sqlIntentionActions";
+  | "sqlIntentionActions"
+  | ToolbarCommandActionId;
+
+/** Toolbar actions that open a dialog or page; App.vue runs them directly, they have no default key. */
+export const TOOLBAR_COMMAND_ACTIONS = ["newConnection", "openDataTransfer", "openDriverManager", "openPluginCenter", "executeSqlFile", "openSchemaDiff", "openDataCompare", "openDatabaseBackups", "openMcpSettings"] as const;
+
+export type ToolbarCommandActionId = (typeof TOOLBAR_COMMAND_ACTIONS)[number];
 
 export type ShortcutScope = "global" | "debug" | "editor" | "grid" | "search" | "sidebar";
 
@@ -514,6 +520,16 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     scope: "global",
     defaultShortcut: "Mod+T",
   },
+  // Labels reuse the toolbar's own strings so the shortcut list, toolbar and native menu read the same.
+  { id: "newConnection", labelKey: "toolbar.newConnection", scope: "global", defaultShortcut: "" },
+  { id: "openDataTransfer", labelKey: "transfer.dataTransfer", scope: "global", defaultShortcut: "" },
+  { id: "openDriverManager", labelKey: "toolbar.driverManager", scope: "global", defaultShortcut: "" },
+  { id: "openPluginCenter", labelKey: "toolbar.pluginCenter", scope: "global", defaultShortcut: "" },
+  { id: "executeSqlFile", labelKey: "sqlFile.title", scope: "global", defaultShortcut: "" },
+  { id: "openSchemaDiff", labelKey: "diff.title", scope: "global", defaultShortcut: "" },
+  { id: "openDataCompare", labelKey: "dataCompare.title", scope: "global", defaultShortcut: "" },
+  { id: "openDatabaseBackups", labelKey: "databaseBackup.title", scope: "global", defaultShortcut: "" },
+  { id: "openMcpSettings", labelKey: "settings.openMcpSettings", scope: "global", defaultShortcut: "" },
   {
     id: "openSettings",
     labelKey: "settings.shortcutOpenSettings",

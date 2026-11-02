@@ -1,13 +1,13 @@
 import { onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { normalizeShortcutSettings, type ShortcutActionId } from "@/lib/editor/shortcutRegistry";
-import { buildNativeMenuGroups, replayShortcut } from "@/lib/app/nativeAppMenu";
+import { normalizeShortcutSettings, type ShortcutActionId, type ToolbarCommandActionId } from "@/lib/editor/shortcutRegistry";
+import { buildNativeMenuGroups, isToolbarCommand, replayShortcut } from "@/lib/app/nativeAppMenu";
 import { isTauriRuntime } from "@/lib/backend/tauriRuntime";
 import { isMacOS } from "@/lib/backend/platform";
 
 /** Keeps the macOS "Actions" menu in sync with the user's shortcuts and UI language. */
-export function useNativeAppMenu() {
+export function useNativeAppMenu(runToolbarCommand: (actionId: ToolbarCommandActionId) => void) {
   if (!isTauriRuntime() || !isMacOS()) return;
   const settingsStore = useSettingsStore();
   const { t, locale } = useI18n();
@@ -26,6 +26,7 @@ export function useNativeAppMenu() {
   let disposed = false;
   void import("@tauri-apps/api/event").then(({ listen }) =>
     listen<ShortcutActionId>("dbx-app-menu-action", (event) => {
+      if (isToolbarCommand(event.payload)) return runToolbarCommand(event.payload);
       const shortcut = shortcuts()[event.payload];
       if (shortcut) replayShortcut(shortcut);
     }).then((handle) => {

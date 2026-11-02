@@ -1,10 +1,11 @@
-import { SHORTCUT_DEFINITIONS, formatShortcut, type ShortcutActionId, type ShortcutScope, type ShortcutSettings } from "@/lib/editor/shortcutRegistry";
+import { SHORTCUT_DEFINITIONS, TOOLBAR_COMMAND_ACTIONS, formatShortcut, type ShortcutActionId, type ShortcutScope, type ShortcutSettings, type ToolbarCommandActionId } from "@/lib/editor/shortcutRegistry";
 import { parseShortcutStrokes } from "@/lib/editor/shortcutDisplay";
 
 // Mirrors the shortcut registry into the macOS menu bar (src-tauri/src/lib.rs
 // build_app_menu_actions_submenu) so actions show their key equivalents and
 // are found by Help → Search. Clicking an item replays the shortcut into the
-// web view, so every existing keydown handler keeps deciding what it does.
+// web view, so every existing keydown handler keeps deciding what it does;
+// toolbar commands run directly since they may have no shortcut to replay.
 
 export interface NativeMenuAction {
   id: ShortcutActionId;
@@ -22,6 +23,10 @@ const SCOPE_ORDER: ShortcutScope[] = ["global", "editor", "grid", "sidebar", "se
 // Key equivalents the static native menu already owns (Quit, Close Tab, the
 // predefined Edit/View/Window items, Hide / Hide Others).
 const NATIVE_MENU_SHORTCUTS = new Set(["Mod+Q", "Mod+W", "Mod+Z", "Mod+Shift+Z", "Mod+X", "Mod+C", "Mod+V", "Mod+A", "Mod+H", "Alt+Mod+H", "Mod+M", "Ctrl+Mod+F"].map(canonical));
+
+export function isToolbarCommand(actionId: string): actionId is ToolbarCommandActionId {
+  return (TOOLBAR_COMMAND_ACTIONS as readonly string[]).includes(actionId);
+}
 
 export function shortcutScopeLabelKey(scope: ShortcutScope): string {
   if (scope === "debug") return "plDebug.start.title";
@@ -52,14 +57,14 @@ export function buildNativeMenuGroups(shortcuts: ShortcutSettings, t: (key: stri
   const taken = new Set(NATIVE_MENU_SHORTCUTS);
   return SCOPE_ORDER.map((scope) => ({
     title: t(shortcutScopeLabelKey(scope)),
-    items: SHORTCUT_DEFINITIONS.filter((definition) => definition.scope === scope && definition.inputKind !== "modifier-only" && shortcuts[definition.id]).map((definition) => {
+    items: SHORTCUT_DEFINITIONS.filter((definition) => definition.scope === scope && definition.inputKind !== "modifier-only" && (shortcuts[definition.id] || isToolbarCommand(definition.id))).map((definition) => {
       const shortcut = shortcuts[definition.id];
       const key = canonical(shortcut);
       // Scopes reuse keys (⌘D in editor and grid); only the first keeps the accelerator.
-      const accelerator = taken.has(key) ? null : shortcutToAccelerator(shortcut);
+      const accelerator = !shortcut || taken.has(key) ? null : shortcutToAccelerator(shortcut);
       if (accelerator) taken.add(key);
       const label = t(definition.labelKey);
-      return { id: definition.id, label: accelerator ? label : `${label}  (${formatShortcut(shortcut, platform)})`, accelerator };
+      return { id: definition.id, label: accelerator || !shortcut ? label : `${label}  (${formatShortcut(shortcut, platform)})`, accelerator };
     }),
   })).filter((group) => group.items.length > 0);
 }

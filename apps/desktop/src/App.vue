@@ -157,6 +157,7 @@ import {
   isModRShortcut,
   handleTabHistoryNavigationShortcut,
   isNewQueryShortcut,
+  toolbarCommandFromShortcut,
   isObjectSourceSaveShortcutTarget,
   isOpenConnectionPickerShortcut,
   isOpenDatabasePickerShortcut,
@@ -181,7 +182,7 @@ import {
   switchToTabIndexFromShortcut,
   tabSwitcherDirectionFromShortcut,
 } from "@/lib/editor/keyboardShortcuts";
-import { normalizeShortcutSettings } from "@/lib/editor/shortcutRegistry";
+import { normalizeShortcutSettings, type ToolbarCommandActionId } from "@/lib/editor/shortcutRegistry";
 import { useNativeAppMenu } from "@/composables/useNativeAppMenu";
 import { DBX_VIM_ACTION_EVENT, type DbxVimActionEvent } from "@/lib/editor/vimDbxActions";
 import { canSaveSqlTab } from "@/lib/tabs/sqlTabSaveTarget";
@@ -1389,7 +1390,7 @@ const { setupTauriListeners, cleanupTauriListeners } = useTauriEvents({
 });
 const { showCloseActionPrompt, chooseQuit, chooseMinimize, cancelCloseActionPrompt, performCloseAction, setupCloseActionPromptListener, cleanupCloseActionPromptListener } = useCloseActionPrompt({ requestClose: requestAppClose });
 useVisibilityChange();
-useNativeAppMenu();
+useNativeAppMenu(runToolbarCommand);
 useWebDavAutoUpload();
 useSnippetAutoUpload();
 useScheduledDatabaseBackups({ scheduler: true });
@@ -4723,6 +4724,40 @@ function handleVimDbxAppAction(event: Event) {
   event.preventDefault();
 }
 
+/** Toolbar actions, shared by the toolbar buttons, their shortcuts and the macOS Actions menu. */
+function runToolbarCommand(actionId: ToolbarCommandActionId) {
+  const hasConnections = connectionStore.connections.length > 0;
+  switch (actionId) {
+    case "newConnection":
+      showConnectionDialog.value = true;
+      break;
+    case "openDataTransfer":
+      if (hasConnections) dialogs.showTransferDialog.value = true;
+      break;
+    case "openDriverManager":
+      openDriverStorePage();
+      break;
+    case "openPluginCenter":
+      openPluginCenterPage();
+      break;
+    case "executeSqlFile":
+      if (hasSqlFileConnections.value) dialogs.showSqlFileDialog.value = true;
+      break;
+    case "openSchemaDiff":
+      if (hasConnections) dialogs.showSchemaDiffDialog.value = true;
+      break;
+    case "openDataCompare":
+      if (hasConnections) dialogs.showDataCompareDialog.value = true;
+      break;
+    case "openDatabaseBackups":
+      openSettings("backups");
+      break;
+    case "openMcpSettings":
+      openSettings("mcp");
+      break;
+  }
+}
+
 async function handleKeydown(e: KeyboardEvent) {
   if (e.defaultPrevented) return;
 
@@ -4853,6 +4888,13 @@ async function handleKeydown(e: KeyboardEvent) {
     const target = e.target instanceof Element ? e.target : null;
     const sidebarFocused = isSidebarFocusedTarget(target, lastFocusedSidebarSurface.value);
     void newQuery({ preferredSource: sidebarFocused ? "sidebar" : undefined });
+    return;
+  }
+  const toolbarCommand = toolbarCommandFromShortcut(e, shortcuts);
+  if (toolbarCommand) {
+    e.preventDefault();
+    e.stopPropagation();
+    runToolbarCommand(toolbarCommand);
     return;
   }
   if (isToggleSidebarShortcut(e, shortcuts)) {
@@ -5477,7 +5519,7 @@ onUnmounted(() => {
           :has-sql-file-connections="hasSqlFileConnections"
           :immediate-syncing="immediateSyncing"
           :show-logout="!isDesktop && needsAuth"
-          @new-connection="showConnectionDialog = true"
+          @new-connection="runToolbarCommand('newConnection')"
           @expand-sidebar="setSidebarOpen(true)"
           @new-query="newQuery({ preferredSource: lastFocusedSidebarSurface ? 'sidebar' : undefined })"
           @set-theme-mode="setThemeMode"
@@ -5487,16 +5529,16 @@ onUnmounted(() => {
           @toggle-sql-file-panel="toggleRightSidebarPanel('sqlFile')"
           @open-github="openGitHub"
           @open-settings="openSettings(showMcpSettingsUpdateBadge ? 'mcp' : 'appearance')"
-          @open-driver-store="openDriverStorePage"
-          @open-plugin-center="openPluginCenterPage()"
+          @open-driver-store="runToolbarCommand('openDriverManager')"
+          @open-plugin-center="runToolbarCommand('openPluginCenter')"
           @check-updates="handleToolbarUpdateClick"
           @immediate-sync="openImmediateSync"
-          @open-transfer="dialogs.showTransferDialog.value = true"
-          @open-sql-file="dialogs.showSqlFileDialog.value = true"
-          @open-schema-diff="dialogs.showSchemaDiffDialog.value = true"
-          @open-data-compare="dialogs.showDataCompareDialog.value = true"
-          @open-backups="openSettings('backups')"
-          @open-mcp-settings="openSettings('mcp')"
+          @open-transfer="runToolbarCommand('openDataTransfer')"
+          @open-sql-file="runToolbarCommand('executeSqlFile')"
+          @open-schema-diff="runToolbarCommand('openSchemaDiff')"
+          @open-data-compare="runToolbarCommand('openDataCompare')"
+          @open-backups="runToolbarCommand('openDatabaseBackups')"
+          @open-mcp-settings="runToolbarCommand('openMcpSettings')"
           @logout="handleWebLogout"
         />
 
@@ -5609,7 +5651,7 @@ onUnmounted(() => {
                     closeSettingsPage();
                     openPluginCenterPage({ pluginId: 'cc-switch' });
                   "
-                  @open-mcp-settings="openSettings('mcp')"
+                  @open-mcp-settings="runToolbarCommand('openMcpSettings')"
                   @ai-config-deep-link-handled="settingsAiConfigDraft = null"
                   @logout="handleWebLogout"
                 />
@@ -5786,7 +5828,7 @@ onUnmounted(() => {
                         :can-new-query="canCreateNewQuery"
                         @open-connection-query="openConnectionQuery"
                         @open-saved-sql="openSavedSqlFromWelcome"
-                        @new-connection="showConnectionDialog = true"
+                        @new-connection="runToolbarCommand('newConnection')"
                         @new-query="newQuery"
                         @show-history="openRightSidebarPanel('history')"
                         @import-config="dialogs.onImportClick"

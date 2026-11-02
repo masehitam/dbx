@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { buildNativeMenuGroups, replayShortcut, shortcutToAccelerator } from "../nativeAppMenu";
+import { buildNativeMenuGroups, isToolbarCommand, replayShortcut, shortcutToAccelerator } from "../nativeAppMenu";
 import { normalizeShortcutSettings } from "@/lib/editor/shortcutRegistry";
-import { matchesShortcut } from "@/lib/editor/keyboardShortcuts";
+import { matchesShortcut, toolbarCommandFromShortcut } from "@/lib/editor/keyboardShortcuts";
 
 const MAC = "MacIntel";
 
@@ -38,8 +38,26 @@ describe("buildNativeMenuGroups", () => {
   });
 
   it("shows the shortcut in the label when there is no accelerator", () => {
-    const withoutAccelerator = items.find((item) => !item.accelerator);
+    const withoutAccelerator = items.find((item) => !item.accelerator && !isToolbarCommand(item.id));
     expect(withoutAccelerator?.label).toMatch(/\(.+\)$/);
+  });
+});
+
+describe("toolbar commands", () => {
+  it("are listed without a shortcut, as plain labels", () => {
+    const items = buildNativeMenuGroups(normalizeShortcutSettings(undefined, MAC), (key) => key, MAC).flatMap((group) => group.items);
+    const newConnection = items.find((item) => item.id === "newConnection");
+    expect(newConnection).toEqual({ id: "newConnection", label: "toolbar.newConnection", accelerator: null });
+    expect(items.find((item) => item.id === "openDataTransfer")).toBeTruthy();
+  });
+
+  it("get an accelerator and a keydown match once the user binds a key", () => {
+    const shortcuts = normalizeShortcutSettings({ newConnection: "Mod+Shift+N" }, MAC);
+    const items = buildNativeMenuGroups(shortcuts, (key) => key, MAC).flatMap((group) => group.items);
+    expect(items.find((item) => item.id === "newConnection")?.accelerator).toBe("CmdOrCtrl+Shift+N");
+    const event = new KeyboardEvent("keydown", { key: "n", code: "KeyN", metaKey: true, shiftKey: true });
+    expect(toolbarCommandFromShortcut(event, shortcuts)).toBe("newConnection");
+    expect(toolbarCommandFromShortcut(new KeyboardEvent("keydown", { key: "n", metaKey: true }), shortcuts)).toBeNull();
   });
 });
 
