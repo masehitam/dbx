@@ -12,7 +12,8 @@ use tauri::{AppHandle, Manager, State, Window};
 use super::connection::AppState;
 use crate::{
     apply_debug_log_level, apply_desktop_settings, clear_startup_probe_after_frontend_ready,
-    hide_main_window_for_close, refresh_native_menus, request_app_close, AppLocaleState, CloseBehaviorState,
+    hide_main_window_for_close, refresh_native_menus, request_app_close, AppLocaleState, AppMenuActionGroup,
+    AppMenuActionsState, CloseBehaviorState,
 };
 
 const DEVELOPMENT_OPEN_TABS_STATE_KEY: &str = "development_open_tabs";
@@ -116,6 +117,16 @@ pub async fn set_app_locale(
     let refresh = refresh_native_menus(&app).map_err(|err| format!("failed to refresh native menus: {err}"));
     persistence?;
     refresh
+}
+
+#[tauri::command]
+pub fn set_app_menu_actions(
+    app: AppHandle,
+    actions_state: State<'_, AppMenuActionsState>,
+    groups: Vec<AppMenuActionGroup>,
+) -> Result<(), String> {
+    actions_state.set(groups);
+    refresh_native_menus(&app).map_err(|err| format!("failed to refresh native menus: {err}"))
 }
 
 #[tauri::command]

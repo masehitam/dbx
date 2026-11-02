@@ -68,6 +68,10 @@ const APP_MENU_COPY_SUPPORT_INFO_ID: &str = "app-menu-copy-support-info";
 const APP_MENU_CLOSE_TAB_ID: &str = "app-menu-close-tab";
 #[cfg(target_os = "macos")]
 const APP_CLOSE_ACTIVE_TAB_EVENT: &str = "dbx-close-active-tab";
+#[cfg(target_os = "macos")]
+const APP_MENU_ACTION_PREFIX: &str = "app-menu-action:";
+#[cfg(target_os = "macos")]
+const APP_MENU_ACTION_EVENT: &str = "dbx-app-menu-action";
 
 pub struct CloseBehaviorState {
     confirmed_exit: AtomicBool,
@@ -93,6 +97,40 @@ impl CloseBehaviorState {
 
     fn is_frontend_ready(&self) -> bool {
         self.frontend_ready.load(Ordering::Acquire)
+    }
+}
+
+/// Shortcut actions the frontend mirrors into the macOS menu bar, so they show
+/// their key equivalents and can be found from Help → Search.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct AppMenuActionGroup {
+    title: String,
+    items: Vec<AppMenuAction>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct AppMenuAction {
+    id: String,
+    label: String,
+    accelerator: Option<String>,
+}
+
+pub struct AppMenuActionsState {
+    groups: std::sync::Mutex<Vec<AppMenuActionGroup>>,
+}
+
+impl AppMenuActionsState {
+    fn new() -> Self {
+        Self { groups: std::sync::Mutex::new(Vec::new()) }
+    }
+
+    pub(crate) fn set(&self, groups: Vec<AppMenuActionGroup>) {
+        *self.groups.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = groups;
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    fn get(&self) -> Vec<AppMenuActionGroup> {
+        self.groups.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
     }
 }
 
@@ -329,50 +367,93 @@ fn build_app_menu<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>) -> tauri:
         Some("Cmd+W"),
     )?;
 
-    Menu::with_items(
+    let app_submenu = Submenu::with_items(
         app_handle,
+        app_name,
+        true,
         &[
-            &Submenu::with_items(
-                app_handle,
-                app_name,
-                true,
-                &[
-                    &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
-                    &copy_support_info_item,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::services(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::hide(app_handle, None)?,
-                    &PredefinedMenuItem::hide_others(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &quit_item,
-                ],
-            )?,
-            &Submenu::with_items(app_handle, "File", true, &[&close_tab_item])?,
-            &Submenu::with_items(
-                app_handle,
-                "Edit",
-                true,
-                &[
-                    &PredefinedMenuItem::undo(app_handle, None)?,
-                    &PredefinedMenuItem::redo(app_handle, None)?,
-                    &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::cut(app_handle, None)?,
-                    &PredefinedMenuItem::copy(app_handle, None)?,
-                    &PredefinedMenuItem::paste(app_handle, None)?,
-                    &PredefinedMenuItem::select_all(app_handle, None)?,
-                ],
-            )?,
-            &Submenu::with_items(app_handle, "View", true, &[&PredefinedMenuItem::fullscreen(app_handle, None)?])?,
-            &Submenu::with_items(
-                app_handle,
-                "Window",
-                true,
-                &[&PredefinedMenuItem::minimize(app_handle, None)?, &PredefinedMenuItem::maximize(app_handle, None)?],
-            )?,
-            &Submenu::with_items(app_handle, "Help", true, &[])?,
+            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
+            &copy_support_info_item,
+            &PredefinedMenuItem::separator(app_handle)?,
+            &PredefinedMenuItem::services(app_handle, None)?,
+            &PredefinedMenuItem::separator(app_handle)?,
+            &PredefinedMenuItem::hide(app_handle, None)?,
+            &PredefinedMenuItem::hide_others(app_handle, None)?,
+            &PredefinedMenuItem::separator(app_handle)?,
+            &quit_item,
         ],
-    )
+    )?;
+    let file_submenu = Submenu::with_items(app_handle, "File", true, &[&close_tab_item])?;
+    let edit_submenu = Submenu::with_items(
+        app_handle,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app_handle, None)?,
+            &PredefinedMenuItem::redo(app_handle, None)?,
+            &PredefinedMenuItem::separator(app_handle)?,
+            &PredefinedMenuItem::cut(app_handle, None)?,
+            &PredefinedMenuItem::copy(app_handle, None)?,
+            &PredefinedMenuItem::paste(app_handle, None)?,
+            &PredefinedMenuItem::select_all(app_handle, None)?,
+        ],
+    )?;
+    let view_submenu =
+        Submenu::with_items(app_handle, "View", true, &[&PredefinedMenuItem::fullscreen(app_handle, None)?])?;
+    let actions_submenu = build_app_menu_actions_submenu(app_handle)?;
+    let window_submenu = Submenu::with_items(
+        app_handle,
+        "Window",
+        true,
+        &[&PredefinedMenuItem::minimize(app_handle, None)?, &PredefinedMenuItem::maximize(app_handle, None)?],
+    )?;
+    let help_submenu = Submenu::with_items(app_handle, "Help", true, &[])?;
+
+    let mut submenus: Vec<&dyn tauri::menu::IsMenuItem<R>> =
+        vec![&app_submenu, &file_submenu, &edit_submenu, &view_submenu];
+    if let Some(actions_submenu) = &actions_submenu {
+        submenus.push(actions_submenu);
+    }
+    submenus.extend([&window_submenu as &dyn tauri::menu::IsMenuItem<R>, &help_submenu]);
+    Menu::with_items(app_handle, &submenus)
+}
+
+/// One "Actions" menu with a submenu per shortcut scope; `None` until the
+/// frontend has pushed its shortcut list.
+#[cfg(target_os = "macos")]
+fn build_app_menu_actions_submenu<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> tauri::Result<Option<Submenu<R>>> {
+    let groups = app_handle.try_state::<AppMenuActionsState>().map(|state| state.get()).unwrap_or_default();
+    let group_submenus = groups
+        .iter()
+        .filter(|group| !group.items.is_empty())
+        .map(|group| {
+            let items = group
+                .items
+                .iter()
+                .map(|action| {
+                    // An accelerator muda cannot parse is dropped, leaving a plain clickable item.
+                    MenuItem::with_id(
+                        app_handle,
+                        format!("{APP_MENU_ACTION_PREFIX}{}", action.id),
+                        &action.label,
+                        true,
+                        action.accelerator.as_deref(),
+                    )
+                })
+                .collect::<tauri::Result<Vec<_>>>()?;
+            let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> =
+                items.iter().map(|item| item as &dyn tauri::menu::IsMenuItem<R>).collect();
+            Submenu::with_items(app_handle, &group.title, true, &refs)
+        })
+        .collect::<tauri::Result<Vec<_>>>()?;
+    if group_submenus.is_empty() {
+        return Ok(None);
+    }
+    let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> =
+        group_submenus.iter().map(|submenu| submenu as &dyn tauri::menu::IsMenuItem<R>).collect();
+    Submenu::with_items(app_handle, "Actions", true, &refs).map(Some)
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -1984,6 +2065,8 @@ pub fn run() {
             }
         } else if event.id() == APP_MENU_CLOSE_TAB_ID {
             let _ = app.emit(APP_CLOSE_ACTIVE_TAB_EVENT, ());
+        } else if let Some(action_id) = event.id().as_ref().strip_prefix(APP_MENU_ACTION_PREFIX) {
+            let _ = app.emit(APP_MENU_ACTION_EVENT, action_id);
         }
     });
 
@@ -1993,6 +2076,7 @@ pub fn run() {
         .manage(commands::plugin_media::PluginMediaState::new())
         .manage(commands::plugin_storage::PluginUiStorageState::new())
         .manage(AppLocaleState::new())
+        .manage(AppMenuActionsState::new())
         .on_page_load(|webview, payload| {
             if payload.event() == PageLoadEvent::Started {
                 if let Some(state) = webview.app_handle().try_state::<CloseBehaviorState>() {
@@ -2374,6 +2458,7 @@ pub fn run() {
             commands::app_settings::load_app_appearance_settings,
             commands::app_settings::update_app_appearance_settings,
             commands::app_settings::set_app_locale,
+            commands::app_settings::set_app_menu_actions,
             commands::app_settings::complete_app_close,
             commands::app_settings::mark_frontend_ready,
             commands::app_settings::request_app_close_from_window_controls,

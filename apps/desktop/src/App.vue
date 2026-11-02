@@ -182,6 +182,7 @@ import {
   tabSwitcherDirectionFromShortcut,
 } from "@/lib/editor/keyboardShortcuts";
 import { normalizeShortcutSettings } from "@/lib/editor/shortcutRegistry";
+import { useNativeAppMenu } from "@/composables/useNativeAppMenu";
 import { DBX_VIM_ACTION_EVENT, type DbxVimActionEvent } from "@/lib/editor/vimDbxActions";
 import { canSaveSqlTab } from "@/lib/tabs/sqlTabSaveTarget";
 import { initialTabSwitcherSelection, moveTabSwitcherSelection, tabSwitcherOrder } from "@/lib/tabs/tabSwitcher";
@@ -1388,6 +1389,7 @@ const { setupTauriListeners, cleanupTauriListeners } = useTauriEvents({
 });
 const { showCloseActionPrompt, chooseQuit, chooseMinimize, cancelCloseActionPrompt, performCloseAction, setupCloseActionPromptListener, cleanupCloseActionPromptListener } = useCloseActionPrompt({ requestClose: requestAppClose });
 useVisibilityChange();
+useNativeAppMenu();
 useWebDavAutoUpload();
 useSnippetAutoUpload();
 useScheduledDatabaseBackups({ scheduler: true });
