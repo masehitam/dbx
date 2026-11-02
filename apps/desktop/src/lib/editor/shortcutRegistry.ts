@@ -176,6 +176,12 @@ export function gotoLineDefaultShortcut(platform = globalThis.navigator?.platfor
   return isMacShortcutPlatform(platform) ? "Mod+Alt+G" : "Mod+G";
 }
 
+// macOS reserves ⌥⌘D system-wide for "Turn Dock Hiding On/Off", so the key never
+// reaches the app there; ⇧⌥⌘D keeps the D mnemonic next to ⌥⌘C / ⌥⌘S.
+export function openDatabasePickerDefaultShortcut(platform = globalThis.navigator?.platform || ""): string {
+  return isMacShortcutPlatform(platform) ? "Shift+Alt+Mod+D" : "Mod+Alt+D";
+}
+
 export function foldAllDefaultShortcut(actionId: "foldAll" | "unfoldAll", platform = globalThis.navigator?.platform || ""): string {
   const key = actionId === "foldAll" ? "[" : "]";
   return `${isMacShortcutPlatform(platform) ? "Ctrl+Alt" : "Shift+Alt"}+${key}`;
@@ -192,6 +198,7 @@ const PLATFORM_DEFAULT_SHORTCUTS: Partial<Record<ShortcutActionId, ReadonlySet<s
   gotoLine: new Set(["Mod+G", "Mod+Alt+G"]),
   foldAll: new Set(["Mod+Alt+[", "Ctrl+Alt+[", "Shift+Alt+["]),
   unfoldAll: new Set(["Mod+Alt+]", "Ctrl+Alt+]", "Shift+Alt+]"]),
+  openDatabasePicker: new Set(["Mod+Alt+D", "Shift+Alt+Mod+D"]),
 };
 const LEGACY_CLOSE_TAB_DEFAULT = "Meta+W";
 const LEGACY_COPY_CURRENT_ROW_DEFAULT = "Mod+D";
@@ -604,7 +611,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     id: "openDatabasePicker",
     labelKey: "settings.shortcutOpenDatabasePicker",
     scope: "global",
-    defaultShortcut: "Mod+Alt+D",
+    defaultShortcut: openDatabasePickerDefaultShortcut(),
   },
   {
     id: "openSchemaPicker",
@@ -879,6 +886,7 @@ function shortcutDefaultForPlatform(definition: ShortcutDefinition, platform: st
   if (definition.id === "navigateTabHistoryForward") return tabNavigationHistoryDefaultShortcut("forward", platform);
   if (definition.id === "toggleAiPanel") return toggleAiPanelDefaultShortcut(platform);
   if (definition.id === "foldAll" || definition.id === "unfoldAll") return foldAllDefaultShortcut(definition.id, platform);
+  if (definition.id === "openDatabasePicker") return openDatabasePickerDefaultShortcut(platform);
   return definition.defaultShortcut;
 }
 

@@ -10,6 +10,7 @@ import {
   foldAllDefaultShortcut,
   formatShortcut,
   gotoLineDefaultShortcut,
+  openDatabasePickerDefaultShortcut,
   isReservedShortcut,
   MACOS_RESERVED_SHORTCUTS,
   normalizeModifierOnlyShortcut,
@@ -247,7 +248,7 @@ describe("shortcutRegistry editor actions", () => {
   it("registers conflict-free global shortcuts for the toolbar connection, database, and schema pickers", () => {
     const pickerDefaults: Array<[ShortcutActionId, string]> = [
       ["openConnectionPicker", "Mod+Alt+C"],
-      ["openDatabasePicker", "Mod+Alt+D"],
+      ["openDatabasePicker", openDatabasePickerDefaultShortcut()],
       ["openSchemaPicker", "Mod+Alt+S"],
     ];
 
@@ -691,6 +692,21 @@ describe("shortcutRegistry editor actions", () => {
       expect(filterShortcutConflictsByVisibleIds(l1, new Set<ShortcutActionId>(["explainSql"]))).toEqual(l1);
       expect(filterShortcutConflictsByVisibleIds(l1, new Set<ShortcutActionId>(["goToColumn"]))).toEqual({});
       expect(filterShortcutConflictsByVisibleIds(l1, new Set())).toEqual({});
+    });
+  });
+
+  describe("openDatabasePicker", () => {
+    it("avoids the macOS Dock-hiding key on Mac and keeps Ctrl+Alt+D elsewhere", () => {
+      expect(openDatabasePickerDefaultShortcut("MacIntel")).toBe("Shift+Alt+Mod+D");
+      expect(openDatabasePickerDefaultShortcut("Win32")).toBe("Mod+Alt+D");
+      expect(openDatabasePickerDefaultShortcut("Linux x86_64")).toBe("Mod+Alt+D");
+    });
+
+    it("moves a saved old default to the platform default but keeps custom bindings", () => {
+      expect(normalizeShortcutSettings({ openDatabasePicker: "Mod+Alt+D" }, "MacIntel").openDatabasePicker).toBe("Shift+Alt+Mod+D");
+      expect(normalizeShortcutSettings({ openDatabasePicker: "Shift+Alt+Mod+D" }, "Win32").openDatabasePicker).toBe("Mod+Alt+D");
+      expect(normalizeShortcutSettings({ openDatabasePicker: "Mod+Alt+B" }, "MacIntel").openDatabasePicker).toBe("Mod+Alt+B");
+      expect(normalizeShortcutSettings({ openDatabasePicker: "" }, "MacIntel").openDatabasePicker).toBe("");
     });
   });
 

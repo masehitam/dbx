@@ -253,7 +253,8 @@ describe("keyboard shortcut matching", () => {
     const modEvent = (key: string) => (isMacShortcutPlatform() ? { key, metaKey: true, altKey: true } : { key, ctrlKey: true, altKey: true });
 
     expect(isOpenConnectionPickerShortcut(modEvent("c"))).toBe(true);
-    expect(isOpenDatabasePickerShortcut(modEvent("d"))).toBe(true);
+    // macOS owns ⌥⌘D (Dock hiding), so the Mac default adds Shift.
+    expect(isOpenDatabasePickerShortcut(isMacShortcutPlatform() ? { ...modEvent("d"), shiftKey: true } : modEvent("d"))).toBe(true);
     expect(isOpenSchemaPickerShortcut(modEvent("s"))).toBe(true);
     expect(isOpenConnectionPickerShortcut(modEvent("d"))).toBe(false);
     expect(isOpenConnectionPickerShortcut({ ...modEvent("c"), altKey: false })).toBe(false);
